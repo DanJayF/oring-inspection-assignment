@@ -59,9 +59,13 @@ public class ORingInspection {
             int t = calculateOtsu(imgInput, h);
             threshold(imgInput, t);
 
-            //Close any small holes in the rings by dilating and then eroding
-            dilate(imgInput);
-            erode(imgInput);
+            //Close any small holes in the rings
+            dilate(imgInput, 1);
+            erode(imgInput, 1);
+
+            //Remove any spurious artifacts
+            erode(imgInput, 3);
+            dilate(imgInput, 2);
 
             //Find largest peak
             //int peak = findHistPeak(h);
@@ -227,60 +231,68 @@ public class ORingInspection {
     }
 
     //Dilate the image input
-    private static void dilate(Mat imgInput) {
+    private static void dilate(Mat imgInput, int runCount) {
 
-        byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
-        imgInput.get(0, 0, data); //Get all pixels
-        byte copy[] = data.clone(); //Create copy of data byte array
+        //Run dilation process runCount times
+        for(int x=0; x<runCount; x++) {
 
-        //Loops through 48400 pixels (220x200 images)
-        for(int i=0; i<data.length; i++) {
+            byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
+            imgInput.get(0, 0, data); //Get all pixels
+            byte copy[] = data.clone(); //Create copy of data byte array
 
-            //Get all neighbouring pixels to the current pixel
-            int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
+            //Loops through 48400 pixels (220x200 images)
+            for(int i=0; i<data.length; i++) {
 
-            try {
-                //Loops through all 8 neighbouring pixels
-                for(int neighbour : neighbours) {
-                    if((copy[neighbour] & 0xff) == 255) {
-                        data[i] = (byte) 255;
+                //Get all 8 neighbour pixels to the current pixel
+                int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
+
+                try {
+                    //Loops through all 8 neighbouring pixels
+                    for(int neighbour : neighbours) {
+                        if((copy[neighbour] & 0xff) == 255) {
+                            data[i] = (byte) 255;
+                        }
                     }
                 }
+                //Ignore ArrayIndexOutOfBounds exceptions
+                catch(ArrayIndexOutOfBoundsException ignored) {}
             }
-            //Ignore ArrayIndexOutOfBounds exceptions
-            catch(ArrayIndexOutOfBoundsException ignored) {}
-        }
 
-        //Replace ingInput with dilated image data
-        imgInput.put(0, 0, data);
+            //Replace ingInput with dilated image data
+            imgInput.put(0, 0, data);
+        }
     }
 
     //Erode the image input
-    private static void erode(Mat imgInput) {
+    private static void erode(Mat imgInput, int runCount) {
 
-        byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
-        imgInput.get(0, 0, data); //Get all pixels
-        byte copy[] = data.clone(); //Create copy of data byte array
+        //Run erosion process runCount times
+        for(int x=0; x<runCount; x++) {
 
-        //Loops through 48400 pixels (220x200 images)
-        for (int i=0;i<data.length;i++) {
+            byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
+            imgInput.get(0, 0, data); //Get all pixels
+            byte copy[] = data.clone(); //Create copy of data byte array
 
-            //Get all neighbour pixels to the current pixel
-            int [] neighbours = {i+1, i-1,i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
+            //Loops through 48400 pixels (220x200 images)
+            for (int i=0; i<data.length; i++) {
 
-            try {
-                //Loops through all 8 neighbouring pixels
-                for(int neighbour : neighbours) {
-                    if ((copy[neighbour] & 0xff) == 0) {
-                        data[i] = (byte) 0;
+                //Get all 8 neighbour pixels to the current pixel
+                int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
+
+                try {
+                    //Loops through all 8 neighbouring pixels
+                    for(int neighbour : neighbours) {
+                        if ((copy[neighbour] & 0xff) == 0) {
+                            data[i] = (byte) 0;
+                        }
                     }
                 }
+                //Ignore ArrayIndexOutOfBounds exceptions
+                catch(ArrayIndexOutOfBoundsException ignored) {}
             }
-            //Ignore ArrayIndexOutOfBounds exceptions
-            catch(ArrayIndexOutOfBoundsException ignored) {}
-        }
 
-        //Replace ingInput with eroded image data
-        imgInput.put(0, 0, data);
+            //Replace ingInput with eroded image data
+            imgInput.put(0, 0, data);
+        }
     }
 }
