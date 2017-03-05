@@ -5,9 +5,13 @@
  * Author: Dan Flynn
  */
 
+package main.java.ie.itb.computervision;
+
 import java.awt.BorderLayout;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
+import java.io.File;
+import java.net.URISyntaxException;
 
 import javax.swing.*;
 
@@ -37,18 +41,27 @@ public class ORingInspection {
         //Begin image processing preparation
         Mat imgInput = new Mat();
         Mat imgOutput = new Mat();
-        
         //CV_8UC3 = 8-bit unsigned integer matrix/image with 3 channels
         Mat histImg = new Mat(256,256, CvType.CV_8UC3);
+
+        //Loop variables
         int i=0;
+        File file = null;
 
         //TODO Stop and report inspection findings at end
         //noinspection InfiniteLoopStatement
         while(true) {
 
             ///READ IMAGE///
-            //TODO Make path relative
-            imgInput = Highgui.imread("/Users/Dan/Development/Computer Vision/oring-inspection-assignment/src/oring-images/Oring" + (i%15+1) + ".jpg",0); //Load Greyscale image
+            try {
+                file = new File(ORingInspection.class.getResource("/oring-images/Oring" + (i%15+1) + ".jpg").toURI());
+            }
+            catch (URISyntaxException ignored) {}
+
+            if (file != null) {
+                imgInput = Highgui.imread(file.getPath(),0); //0 = Load Greyscale image
+            }
+            else {break;}
 
 
             ///PROCESS IMAGE///
@@ -173,7 +186,7 @@ public class ORingInspection {
         byte [] b = new byte[bufferSize];
 
         m.get(0,0,b); //Get all pixels
-        BufferedImage image = new BufferedImage(m.cols(),m.rows(), type);
+        BufferedImage image = new BufferedImage(m.cols(), m.rows(), type);
 
         final byte[] targetPixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
         System.arraycopy(b, 0, targetPixels, 0, b.length);

@@ -1,4 +1,4 @@
-package org.ml.ccl;
+package main.java.ie.itb.computervision;
 
 import java.awt.Color;
 import java.awt.Graphics;

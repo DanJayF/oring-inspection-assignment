@@ -1,4 +1,4 @@
-package org.ml.ccl;
+package main.java.ie.itb.computervision;
 
 public class Label {
     public int name;
