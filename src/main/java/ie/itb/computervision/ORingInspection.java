@@ -2,6 +2,7 @@
  * Institute of Technology, Blanchardstown
  * Computer Vision (Year 4)
  * O-Ring Image Inspection Assignment
+ * Main Class
  * Author: Dan Flynn
  */
 
@@ -12,7 +13,9 @@ import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.net.URISyntaxException;
+import java.util.Map;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 
 import org.opencv.core.*;
@@ -49,7 +52,6 @@ public class ORingInspection {
         File file = null;
 
         //TODO Stop and report inspection findings at end
-        //noinspection InfiniteLoopStatement
         while(true) {
 
             ///READ IMAGE///
@@ -65,24 +67,26 @@ public class ORingInspection {
 
 
             ///PROCESS IMAGE///
+            //1. Threshold the image using calculated histogram
             int [] h = hist(imgInput);
-            //drawHistogram(histImg, h);
-
-            //Threshold the image
             int t = calculateOtsu(imgInput, h);
             threshold(imgInput, t);
 
-            //Close any small holes in the rings
+            //2.1 Close any small holes in the rings
             dilate(imgInput, 1);
             erode(imgInput, 1);
 
-            //Remove any spurious artifacts
+            //2.2 Remove any spurious artifacts
             erode(imgInput, 3);
             dilate(imgInput, 2);
 
-            //Find largest peak
-            //int peak = findHistPeak(h);
-            //System.out.println("Histogram peak is: " + peak);
+            //3. Perform CCL to extract the two regions (WIP)
+            //TODO: Change to separate output directory
+            processCCL(imgInput, file.getPath());
+
+            //4. Analyse regions to classify the Oring (Pass/Fail)
+
+            //5. Measure the image processing time (text annotation)
 
 
             ///DISPLAY IMAGE///
@@ -98,6 +102,23 @@ public class ORingInspection {
             try {Thread.sleep(2000);}
             catch (InterruptedException e) {e.printStackTrace();}
         }
+    }
+
+    //Calculate image histogram
+    private static int [] hist(Mat imgInput) {
+
+        //Note that we need to use an & with 0xff here.
+        //This is because Java uses signed two's complement types.
+        //The & operation will give us the pixel in the range we are used to (0..255).
+
+        int hist [] = new int[256];
+        byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
+        imgInput.get(0, 0, data); //Get all pixels
+
+        for(byte value : data) {
+            hist[(value & 0xff)]++;
+        }
+        return hist;
     }
 
     //Otsu's Method Global Thresholding
@@ -174,75 +195,6 @@ public class ORingInspection {
         imgInput.put(0, 0, data);
     }
 
-    //Convert to BufferedImage for JLabel
-    private static BufferedImage Mat2BufferedImage(Mat m) {
-        //Source: http://answers.opencv.org/question/10344/opencv-java-load-image-to-gui/
-
-        int type = BufferedImage.TYPE_BYTE_GRAY;
-        if (m.channels() > 1) {
-            type = BufferedImage.TYPE_3BYTE_BGR;
-        }
-        int bufferSize = m.channels() * m.cols() * m.rows();
-        byte [] b = new byte[bufferSize];
-
-        m.get(0,0,b); //Get all pixels
-        BufferedImage image = new BufferedImage(m.cols(), m.rows(), type);
-
-        final byte[] targetPixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-        System.arraycopy(b, 0, targetPixels, 0, b.length);
-
-        return image;
-    }
-
-    //Calculate image histogram
-    private static int [] hist(Mat imgInput) {
-
-        //Note that we need to use an & with 0xff here.
-        //This is because Java uses signed two's complement types.
-        //The & operation will give us the pixel in the range we are used to (0..255).
-
-        int hist [] = new int[256];
-        byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
-        imgInput.get(0, 0, data); //Get all pixels
-
-        for(byte value : data) {
-            hist[(value & 0xff)]++;
-        }
-        return hist;
-    }
-
-    //Draw image histogram
-    private static void drawHistogram(Mat imgInput, int [] hist) {
-
-        //Define histogram scale by finding max hist value
-        int max = 0;
-        for(int value : hist) {
-            if (value > max)
-                max = value;
-        }
-        int scale = max/256;
-
-        //Draw histogram object (incomplete)
-        for(int i=0; i<hist.length-1; i++) {
-            //Core.circle(imgInput, new Point(i*2+1,imgInput.rows()-(hist[i]/scale)+1), 1, new Scalar(0,255,0));
-            Core.line(imgInput, new Point(i+1,imgInput.rows()-(hist[i]/scale)+1), new Point(i+2,imgInput.rows()-(hist[i+1]/scale)+1), new Scalar(0,0,255));
-        }
-    }
-
-    //Find the largest peak in the histogram
-    private static int findHistPeak(int [] hist) {
-
-        int largestValue = hist[0];
-        int indexOfLargest = 0;
-        for(int i=0; i<hist.length; i++) {
-            if(hist[i] > largestValue) {
-                largestValue = hist[i];
-                indexOfLargest = i;
-            }
-        }
-        return indexOfLargest-50;
-    }
-
     //Dilate the image input
     private static void dilate(Mat imgInput, int runCount) {
 
@@ -307,5 +259,78 @@ public class ORingInspection {
             //Replace ingInput with eroded image data
             imgInput.put(0, 0, data);
         }
+    }
+
+    //Process Connected Component Labelling
+    private static void processCCL(Mat imgInput, String filePath) {
+
+        CCL ccl = new CCL();
+        try {
+            //Convert imgInput to a BufferedImage
+            BufferedImage img = Mat2BufferedImage(imgInput);
+
+            //Process CCL and retrieve all components
+            Map<Integer, BufferedImage> components = ccl.Process(img);
+
+            //Output component and fully processed images
+            String format = ccl.getFileNameExtension(filePath);
+            for(Integer c : components.keySet()) {
+                ImageIO.write(components.get(c), format, new File(ccl.getBaseFileName(filePath) + "-component-" + c + "."  + format));
+            }
+            ImageIO.write(ccl.getProcessedImage(), format, new File(ccl.getBaseFileName(filePath) + "-processed" + "." + format));
+        }
+        catch(Exception e) {e.printStackTrace();}
+    }
+
+    //Convert to BufferedImage for JLabel
+    private static BufferedImage Mat2BufferedImage(Mat m) {
+        //Source: http://answers.opencv.org/question/10344/opencv-java-load-image-to-gui/
+
+        int type = BufferedImage.TYPE_BYTE_GRAY;
+        if (m.channels() > 1) {
+            type = BufferedImage.TYPE_3BYTE_BGR;
+        }
+        int bufferSize = m.channels() * m.cols() * m.rows();
+        byte [] b = new byte[bufferSize];
+
+        m.get(0,0,b); //Get all pixels
+        BufferedImage image = new BufferedImage(m.cols(), m.rows(), type);
+
+        final byte[] targetPixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+        System.arraycopy(b, 0, targetPixels, 0, b.length);
+
+        return image;
+    }
+
+    //Draw image histogram
+    private static void drawHistogram(Mat imgInput, int [] hist) {
+
+        //Define histogram scale by finding max hist value
+        int max = 0;
+        for(int value : hist) {
+            if (value > max)
+                max = value;
+        }
+        int scale = max/256;
+
+        //Draw histogram object (incomplete)
+        for(int i=0; i<hist.length-1; i++) {
+            //Core.circle(imgInput, new Point(i*2+1,imgInput.rows()-(hist[i]/scale)+1), 1, new Scalar(0,255,0));
+            Core.line(imgInput, new Point(i+1,imgInput.rows()-(hist[i]/scale)+1), new Point(i+2,imgInput.rows()-(hist[i+1]/scale)+1), new Scalar(0,0,255));
+        }
+    }
+
+    //Find the largest peak in the histogram
+    private static int findHistPeak(int [] hist) {
+
+        int largestValue = hist[0];
+        int indexOfLargest = 0;
+        for(int i=0; i<hist.length; i++) {
+            if(hist[i] > largestValue) {
+                largestValue = hist[i];
+                indexOfLargest = i;
+            }
+        }
+        return indexOfLargest-50;
     }
 }

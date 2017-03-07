@@ -1,16 +1,22 @@
+/*
+ * Institute of Technology, Blanchardstown
+ * Computer Vision (Year 4)
+ * O-Ring Image Inspection Assignment
+ * Pixel Object
+ * Author: Dan Flynn
+ */
+
 package main.java.ie.itb.computervision;
 
-public class Pixel
-{
+public class Pixel {
+
 	public int x;
 	public int y;
 	public int color;
 
-    public Pixel(int x, int y, int color)
-    {
+    public Pixel(int x, int y, int color) {
         this.x = x;
         this.y = y;
         this.color = color;
     }
-
 }
