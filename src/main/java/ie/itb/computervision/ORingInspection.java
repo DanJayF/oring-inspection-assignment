@@ -12,6 +12,7 @@ import java.awt.BorderLayout;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.File;
+import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Map;
 
@@ -48,22 +49,22 @@ public class ORingInspection {
         Mat histImg = new Mat(256,256, CvType.CV_8UC3);
 
         //Loop variables
-        int i=0;
-        File file = null;
+        int i=1; //Image counter
 
-        //TODO Stop and report inspection findings at end
         while(true) {
 
             ///READ IMAGE///
+            File file = null;
             try {
-                file = new File(ORingInspection.class.getResource("/oring-images/Oring" + (i%15+1) + ".jpg").toURI());
+                //Get next image file
+                file = new File(ORingInspection.class.getResource("/oring-images/Oring" + i + ".jpg").toURI());
+                //Load Greyscale image with OpenCV
+                imgInput = Highgui.imread(file.getPath(),0);
             }
             catch (URISyntaxException ignored) {}
+            catch (NullPointerException ignored) {break;}
 
-            if (file != null) {
-                imgInput = Highgui.imread(file.getPath(),0); //0 = Load Greyscale image
-            }
-            else {break;}
+            i++; //Advance to next
 
 
             ///PROCESS IMAGE///
@@ -81,8 +82,7 @@ public class ORingInspection {
             dilate(imgInput, 2);
 
             //3. Perform CCL to extract the two regions (WIP)
-            //TODO: Change to separate output directory
-            processCCL(imgInput, file.getPath());
+            processCCL(imgInput, file);
 
             //4. Analyse regions to classify the Oring (Pass/Fail)
 
@@ -98,10 +98,17 @@ public class ORingInspection {
             window.pack();
 
             //Advance to next every 2 seconds
-            i++;
             try {Thread.sleep(2000);}
             catch (InterruptedException e) {e.printStackTrace();}
         }
+
+        //Processing complete dialog
+        JOptionPane.showMessageDialog(null,
+                "Image processing complete!",
+                "Success",
+                JOptionPane.INFORMATION_MESSAGE);
+
+        //TODO Report inspection findings at end
     }
 
     //Calculate image histogram
@@ -262,22 +269,40 @@ public class ORingInspection {
     }
 
     //Process Connected Component Labelling
-    private static void processCCL(Mat imgInput, String filePath) {
+    private static void processCCL(Mat imgInput, File file) {
 
         CCL ccl = new CCL();
+        String filePath = file.getPath(); //Base path as String
+
         try {
-            //Convert imgInput to a BufferedImage
+            //1. Convert imgInput to a BufferedImage
             BufferedImage img = Mat2BufferedImage(imgInput);
 
-            //Process CCL and retrieve all components
+            //2. Process CCL and retrieve all image components
             Map<Integer, BufferedImage> components = ccl.Process(img);
 
-            //Output component and fully processed images
+            //3. Get new CCL images directory path
+            String cclDirectoryName = "oring-ccl";
+            File cclPath = ccl.getCCLImagesPath(filePath, cclDirectoryName);
+            
+            //4. Get image file extension
             String format = ccl.getFileNameExtension(filePath);
-            for(Integer c : components.keySet()) {
-                ImageIO.write(components.get(c), format, new File(ccl.getBaseFileName(filePath) + "-component-" + c + "."  + format));
+
+            //5.1 Check if directory exists, if not, create it
+            if(ccl.checkIfDirectoryExists(cclPath)) {
+                
+                //6. Output an image for each component
+                for(Integer cNum : components.keySet()) {
+                    ImageIO.write(components.get(cNum), format, new File(cclPath + File.separator + ccl.getBaseFileName(file) + "-component-" + cNum + "."  + format));
+                }
+                //7. Output fully processed images
+                ImageIO.write(ccl.getProcessedImage(), format, new File(cclPath + File.separator + ccl.getBaseFileName(file) + "-processed" + "." + format));
             }
-            ImageIO.write(ccl.getProcessedImage(), format, new File(ccl.getBaseFileName(filePath) + "-processed" + "." + format));
+
+            //5.2 Throw an IOException if output directory creation fails
+            else {
+                throw new IOException("Error while creating /" + cclDirectoryName + " directory");
+            }
         }
         catch(Exception e) {e.printStackTrace();}
     }

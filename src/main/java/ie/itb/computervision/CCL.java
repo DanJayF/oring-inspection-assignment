@@ -17,9 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.imageio.ImageIO;
-
-public class CCL {
+class CCL {
 
     private int[][] _board;
     private BufferedImage _input;
@@ -29,7 +27,7 @@ public class CCL {
     private int backgroundColor;
 
     //Main image processing controller
-    public Map<Integer, BufferedImage> Process(BufferedImage input) {
+    Map<Integer, BufferedImage> Process(BufferedImage input) {
 
         //Instantiate variables
         backgroundColor = 0xFF000000; //Black (Hardcoded)
@@ -44,7 +42,7 @@ public class CCL {
         Map<Integer, List<Pixel>> patterns = FindPatterns();
 
         //Create image HashMap of patterns
-        Map<Integer, BufferedImage> images = new HashMap<Integer, BufferedImage>();
+        Map<Integer, BufferedImage> images = new HashMap<>();
         inputGD = _input.getGraphics();
         inputGD.setColor(Color.BLUE); //TODO: Change this to black or white?
         for(Integer id : patterns.keySet()) {
@@ -58,16 +56,12 @@ public class CCL {
     }
 
     //Check if pixel color is equal to backgroundColor (black).
-    protected boolean CheckIsBackGround(Pixel currentPixel) {
+    private boolean CheckIsBackGround(Pixel currentPixel) {
     	return currentPixel.color == backgroundColor;
     }
 
     //TODO: Investigate this method and rename it!
     private static int Min(List<Integer> neighboringLabels, Map<Integer, Label> allLabels) {
-
-        if(neighboringLabels.isEmpty())
-    		return 0; //TODO: Is this required?
-    	
     	int ret = allLabels.get(neighboringLabels.get(0)).GetRoot().name;
     	for(Integer n : neighboringLabels) {
     		int curVal = allLabels.get(n).GetRoot().name;
@@ -78,10 +72,6 @@ public class CCL {
 
     //Get minimum x or y value of current pattern
     private static int Min(List<Pixel> pattern, boolean xOrY) {
-
-        if(pattern.isEmpty())
-    		return 0; //TODO: Is this required?
-    	
     	int ret = (xOrY ? pattern.get(0).x : pattern.get(0).y);
     	for(Pixel p : pattern) {
     		int curVal = (xOrY ? p.x : p.y);
@@ -92,10 +82,6 @@ public class CCL {
 
     //Get maximum x or y value of current pattern
     private static int Max(List<Pixel> pattern, boolean xOrY) {
-
-        if(pattern.isEmpty())
-    		return 0; //TODO: Is this required?
-    	
     	int ret = (xOrY ? pattern.get(0).x : pattern.get(0).y);
     	for(Pixel p : pattern) {
     		int curVal = (xOrY ? p.x : p.y);
@@ -108,12 +94,12 @@ public class CCL {
     private Map<Integer, List<Pixel>> FindPatterns() {
 
         int labelCount = 1;
-        Map<Integer, Label> allLabels = new HashMap<Integer, Label>();
+        Map<Integer, Label> allLabels = new HashMap<>();
 
         for (int i = 0; i < _height; i++) {
-
             for (int j = 0; j < _width; j++) {
 
+                //Get current pixel object
                 Pixel currentPixel = new Pixel(j, i, _input.getRGB(j, i));
 
                 //Check is background color black
@@ -140,21 +126,20 @@ public class CCL {
                         }
                     }
                 }
-
+                //Add the current label to the image board
                 _board[j][i] = currentLabel;
             }
         }
 
-        Map<Integer, List<Pixel>> patterns = AggregatePatterns(allLabels);
-
-        return patterns;
+        //Return all image patterns
+        return AggregatePatterns(allLabels);
     }
 
     //Get the labels of current pixel neighbours
     private List<Integer> GetNeighboringLabels(Pixel pix) {
 
         //ArrayList to hold labels
-        List<Integer> neighboringLabels = new ArrayList<Integer>();
+        List<Integer> neighboringLabels = new ArrayList<>();
 
         //Add neighbour labels to ArrayList
         for(int i = pix.y - 1; i <= pix.y + 2 && i < _height - 1; i++) {
@@ -171,7 +156,7 @@ public class CCL {
     //Aggregate all patterns
     private Map<Integer, List<Pixel>> AggregatePatterns(Map<Integer, Label> allLabels) {
 
-        Map<Integer, List<Pixel>> patterns = new HashMap<Integer, List<Pixel>>();
+        Map<Integer, List<Pixel>> patterns = new HashMap<>();
 
         for (int i = 0; i < _height; i++) {
             for (int j = 0; j < _width; j++) {
@@ -182,9 +167,8 @@ public class CCL {
                     patternNumber = allLabels.get(patternNumber).GetRoot().name;
 
                     if (!patterns.containsKey(patternNumber)) {
-                        patterns.put(patternNumber, new ArrayList<Pixel>());
+                        patterns.put(patternNumber, new ArrayList<>());
                     }
-
                     patterns.get(patternNumber).add(new Pixel(j, i, _input.getRGB(j, i)));
                 }
             }
@@ -212,18 +196,39 @@ public class CCL {
         return bmp;
     }
 
-    //Extract "example" from "example.jpg"
-    public String getBaseFileName(String fileName) {
-    	return fileName.substring(0, fileName.indexOf('.'));
+    //Create CCL Image directory path
+    File getCCLImagesPath(String filePath, String directoryName) {
+        //Get parent path of current file
+        int i = filePath.lastIndexOf(File.separator);
+        String parentPath = (i > -1) ? filePath.substring(0, i) : filePath;
+
+        //Return CCL Image directory path
+        return new File(parentPath + File.separator + directoryName);
     }
 
     //Extract "jpg" from "example.jpg"
-    public String getFileNameExtension(String fileName) {
-    	return fileName.substring(fileName.indexOf('.') + 1);
+    String getFileNameExtension(String fileName) {
+        return fileName.substring(fileName.indexOf('.') + 1);
+    }
+
+    //Check if a directory exists, otherwise create it
+    boolean checkIfDirectoryExists(File path) {
+        //Return true if exists or if the directory was created successfully. Otherwise return false.
+        return path.exists() || path.mkdirs();
+    }
+
+    //Extract "example" from "/parent/example.jpg"
+    String getBaseFileName(File file) {
+        String baseName = file.getName();
+        int pos = baseName.lastIndexOf(".");
+        if (pos > 0) {
+            baseName = baseName.substring(0, pos);
+        }
+        return baseName;
     }
 
     //Return _input
-    public BufferedImage getProcessedImage() {
+    BufferedImage getProcessedImage() {
     	return _input;
     }
 }
