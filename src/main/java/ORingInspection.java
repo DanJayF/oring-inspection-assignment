@@ -8,106 +8,162 @@
 
 package main.java;
 
-import java.awt.BorderLayout;
+import org.opencv.core.*;
+import org.opencv.core.Point;
+import org.opencv.highgui.Highgui;
+
+import javax.swing.*;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.File;
-import java.io.IOException;
 import java.net.URISyntaxException;
-
-import javax.imageio.ImageIO;
-import javax.swing.*;
-
-import main.java.ccl.CCL;
-import org.opencv.core.*;
-import org.opencv.highgui.Highgui;
-import org.opencv.imgproc.Imgproc;
 
 public class ORingInspection {
 
-    public static void main(String[] args) {
+    //Global variables
+    private static JFrame window;
+    private static JLabel containerOriginal;
+    private static JLabel containerHist;
+    private static JLabel containerThresh;
+    private static JLabel containerBM;
+    private static JLabel containerCCL;
+    private static JLabel containerResult;
 
-        //Load native OpenCV library
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+    //Initialise JFrame components
+    private ORingInspection() {
 
         //Create and set up the window.
-        JFrame window = new JFrame("OpenCV O-Ring Inspection");
+        window = new JFrame("OpenCV O-Ring Inspection");
         window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        window.setLayout(new GridLayout());
 
-        //Setup the JLabel image container
-        JLabel imgContainer = new JLabel();
-        window.getContentPane().add(imgContainer, BorderLayout.CENTER);
+        //Panels for each step of the process
+        JPanel panelOriginal = new JPanel();
+        JPanel panelHist = new JPanel();
+        JPanel panelThresh = new JPanel();
+        JPanel panelBM = new JPanel();
+        JPanel panelCCL = new JPanel();
+        JPanel panelResult = new JPanel();
+
+        //Setup JLabel image containers
+        containerOriginal = new JLabel("Orignal");
+        containerOriginal.setHorizontalTextPosition(JLabel.CENTER);
+        containerOriginal.setVerticalTextPosition(JLabel.BOTTOM);
+
+        containerHist     = new JLabel("Histogram");
+        containerHist.setHorizontalTextPosition(JLabel.CENTER);
+        containerHist.setVerticalTextPosition(JLabel.BOTTOM);
+
+        containerThresh   = new JLabel("After Thresholding");
+        containerThresh.setHorizontalTextPosition(JLabel.CENTER);
+        containerThresh.setVerticalTextPosition(JLabel.BOTTOM);
+
+        containerBM       = new JLabel("After Binary Morphology");
+        containerBM.setHorizontalTextPosition(JLabel.CENTER);
+        containerBM.setVerticalTextPosition(JLabel.BOTTOM);
+
+        containerCCL      = new JLabel("After CCL");
+        containerCCL.setHorizontalTextPosition(JLabel.CENTER);
+        containerCCL.setVerticalTextPosition(JLabel.BOTTOM);
+
+        containerResult   = new JLabel("Analysis Result");
+        containerResult.setHorizontalTextPosition(JLabel.CENTER);
+        containerResult.setVerticalTextPosition(JLabel.BOTTOM);
+
+        //Add all JLabels to the two panels
+        panelOriginal.add(containerOriginal, BorderLayout.CENTER);
+        panelHist.add(containerHist, BorderLayout.CENTER);
+        panelThresh.add(containerThresh, BorderLayout.CENTER);
+        panelBM.add(containerBM, BorderLayout.CENTER);
+        panelCCL.add(containerCCL, BorderLayout.CENTER);
+        panelResult.add(containerResult, BorderLayout.CENTER);
+
+        //Add the two panels to the frame
+        window.getContentPane().add(panelOriginal);
+        window.getContentPane().add(panelHist);
+        window.getContentPane().add(panelThresh);
+        window.getContentPane().add(panelBM);
+        window.getContentPane().add(panelCCL);
+        window.getContentPane().add(panelResult);
 
         //Display the window.
         window.pack();
         window.setVisible(true);
+    }
 
-        //Begin image processing preparation
+    public static void main(String[] args) {
+
+        //Initialise JFrame components
+        new ORingInspection();
+
+        //Load native OpenCV library
+        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+
+        //Instantiate variables
         Mat imgInput = new Mat();
-        Mat imgOutput = new Mat();
-        //CV_8UC3 = 8-bit unsigned integer matrix/image with 3 channels
-        Mat histImg = new Mat(256,256, CvType.CV_8UC3); //TODO: Integrate into JFrame
+        int i=0; //Image counter
 
-        //Loop variables
-        int i=1; //Image counter
-
+        //noinspection InfiniteLoopStatement
         while(true) {
 
-            ///READ IMAGE///
-            File file = null;
+            ///READ ORIGINAL IMAGE///
+            BufferedImage imgOriginal = null;
             try {
                 //Get next image file
-                file = new File(ORingInspection.class.getResource("/oring-images/Oring" + i + ".jpg").toURI());
+                File file = new File(ORingInspection.class.getResource("/oring-images/Oring" + (i%15+1) + ".jpg").toURI());
                 //Load Greyscale image with OpenCV
                 imgInput = Highgui.imread(file.getPath(),0);
+                imgOriginal = Mat2BufferedImage(imgInput);
             }
             catch (URISyntaxException ignored) {}
-            catch (NullPointerException ignored) {break;}
 
             i++; //Advance to next
 
 
-            ///PROCESS IMAGE///
-            //1. Threshold the image using calculated histogram
+            ///PROCESS IMAGES///
+            //1. Calculate and draw the image histogram
+            Mat histImg = new Mat(220,220, CvType.CV_8UC3);
             int [] h = hist(imgInput);
+            drawHistogram(histImg, h);
+            BufferedImage imgHistogram = Mat2BufferedImage(histImg);
+
+            //2. Threshold the image using histogram
             int t = calculateOtsu(imgInput, h);
             threshold(imgInput, t);
-
-            //2. Draw histogram for JFrame
-            //drawHistogram(histImg, h); //TODO: Integrate into JFrame
+            BufferedImage imgThreshold = Mat2BufferedImage(imgInput);
 
             //3. Close any small holes in the rings
             dilate(imgInput);
             erode(imgInput);
+            BufferedImage imgBM = Mat2BufferedImage(imgInput);
 
             //4. Perform CCL to remove any spurious artifacts
-            performCCL(imgInput, file);
+            performCCL(imgInput);
+            BufferedImage imgCCL = Mat2BufferedImage(imgInput);
 
             //5. Analyse regions to classify the Oring (Pass/Fail)
+            BufferedImage imgResult = Mat2BufferedImage(imgInput);
 
             //6. Measure the image processing time (text annotation)
 
 
-            ///DISPLAY IMAGE///
-            Imgproc.cvtColor(imgInput, imgOutput, Imgproc.COLOR_GRAY2BGR);
+            ///DISPLAY IMAGES///
+            //Add current images to their JPanels
+            containerOriginal.setIcon(new ImageIcon(imgOriginal));
+            containerHist.setIcon(new ImageIcon(imgHistogram));
+            containerThresh.setIcon(new ImageIcon(imgThreshold));
+            containerBM.setIcon(new ImageIcon(imgBM));
+            containerCCL.setIcon(new ImageIcon(imgCCL));
+            containerResult.setIcon(new ImageIcon(imgResult));
 
-            //Convert to a Java BufferedImage so we can display in a label
-            BufferedImage javaImg = Mat2BufferedImage(imgOutput);
-            imgContainer.setIcon(new ImageIcon(javaImg));
+            //Repack the JFrame
             window.pack();
 
-            //Advance to next every 2 seconds
-            try {Thread.sleep(2000);}
+            //Advance to next every 1 second
+            try {Thread.sleep(1500);}
             catch (InterruptedException e) {e.printStackTrace();}
         }
-
-        //Processing complete dialog
-        JOptionPane.showMessageDialog(null,
-                "Image processing complete!",
-                "Success",
-                JOptionPane.INFORMATION_MESSAGE);
-
-        //TODO Report inspection findings at end
     }
 
     //Calculate image histogram
@@ -121,6 +177,37 @@ public class ORingInspection {
             hist[(value & 0xff)]++;
         }
         return hist;
+    }
+
+    //Find the largest peak in the histogram
+    private static int findHistPeak(int [] hist) {
+
+        int largestValue = hist[0];
+        int indexOfLargest = 0;
+        for(int i=0; i<hist.length; i++) {
+            if(hist[i] > largestValue) {
+                largestValue = hist[i];
+                indexOfLargest = i;
+            }
+        }
+        return indexOfLargest-50;
+    }
+
+    //Draw image histogram
+    private static void drawHistogram(Mat imgInput, int[] hist) {
+
+        //Define histogram scale by finding max hist value
+        int max = 0;
+        for (int value : hist) {
+            if (value > max)
+                max = value;
+        }
+        int scale = max / 256;
+
+        //Draw histogram object
+        for (int i = 0; i < hist.length - 1; i++) {
+            Core.line(imgInput, new Point(i + 1, imgInput.rows() - (hist[i] / scale) + 1), new Point(i + 2, imgInput.rows() - (hist[i + 1] / scale) + 1), new Scalar(0, 0, 255));
+        }
     }
 
     //Otsu's Method Global Thresholding
@@ -257,35 +344,65 @@ public class ORingInspection {
         imgInput.put(0, 0, data);
     }
 
-    //Process Connected Component Labelling
-    private static void performCCL(Mat imgInput, File file) {
+    //Perform Connected Component Labelling (CCL) on imgInput
+    private static byte[] performCCL(Mat imgInput) {
 
-        //1. Perform CCL on imgInput to identify components
-        CCL ccl = new CCL();
-        imgInput.put(0, 0, ccl.processCCL(imgInput));
+        //Build two byte arrays from input image
+        byte imgData[] = new byte[imgInput.rows() * imgInput.cols()];
+        byte label[]   = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, imgData); //Get all pixels
 
-        //2. Get new CCL images directory path from base bath
-        String filePath = file.getPath();
-        String cclDirectoryName = "oring-ccl";
-        File cclPath = ccl.getCCLImagesPath(filePath, cclDirectoryName);
+        //Instantiate variables
+        int currentLabel = 1; //Label 1 is the ring
+        int pixel;
+        DataQueue queue = new DataQueue();
 
-        //3. Get image file extension
-        String format = ccl.getFileNameExtension(filePath);
+        //Loop through all pixels
+        for (int i = 0; i < imgData.length; i++) {
 
-        try {
-            //4.1 Check if directory exists, if not, create it
-            if(ccl.checkIfDirectoryExists(cclPath)) {
+            if ((imgData[i] & 0xff) == 255 && label[i] == 0) {
 
-                //5. Output fully processed images
-                ImageIO.write(Mat2BufferedImage(imgInput), format, new File(cclPath + File.separator + ccl.getBaseFileName(file) + "-ccl" + "." + format));
-            }
+                label[i] = (byte) (currentLabel);
 
-            //4.2 Throw an IOException if output directory creation fails
-            else {
-                throw new IOException("Error while creating /" + cclDirectoryName + " directory");
+                try {
+                    //Add current pixel to the queue
+                    queue.enQueue(i);
+
+                    //While queue is not empty
+                    while (!queue.isEmpty()) {
+
+                        pixel = queue.deQueue();
+
+                        //Get all 8 neighbouring pixels
+                        int [] neighbours = {pixel + 1, pixel - 1,
+                                pixel - imgInput.cols(), pixel + imgInput.cols(),
+                                pixel + imgInput.cols() + 1, pixel + imgInput.cols() - 1,
+                                pixel - imgInput.cols() + 1, pixel - imgInput.cols() - 1};
+
+                        //Foreach neighbour pixel
+                        for (int neighbour : neighbours) {
+                            if ((imgData[neighbour] & 0xff) == 255 && label[neighbour] == 0) {
+                                label[neighbour] = (byte) (currentLabel);
+                                queue.enQueue(neighbour);
+                            }
+                        }
+                    }
+                    currentLabel += 1; //Next component is not part of the ring
+                }
+                catch (ArrayIndexOutOfBoundsException ignored) {}
             }
         }
-        catch(Exception e) {e.printStackTrace();}
+
+        //Remove imperfections using CCL data
+        for (int i=0; i<imgData.length; i++) {
+            if ((label[i] & 0xff) > 1) {
+                imgData[i] = 0; //Set pixel to black
+            }
+        }
+
+        //Save all processed pixels to label
+        imgInput.put(0, 0, imgData);
+        return imgData;
     }
 
     //Convert to BufferedImage for JLabel
@@ -305,37 +422,5 @@ public class ORingInspection {
         System.arraycopy(b, 0, targetPixels, 0, b.length);
 
         return image;
-    }
-
-    //Draw image histogram
-    private static void drawHistogram(Mat imgInput, int [] hist) {
-
-        //Define histogram scale by finding max hist value
-        int max = 0;
-        for(int value : hist) {
-            if (value > max)
-                max = value;
-        }
-        int scale = max/256;
-
-        //Draw histogram object (incomplete)
-        for(int i=0; i<hist.length-1; i++) {
-            //Core.circle(imgInput, new Point(i*2+1,imgInput.rows()-(hist[i]/scale)+1), 1, new Scalar(0,255,0));
-            Core.line(imgInput, new Point(i+1,imgInput.rows()-(hist[i]/scale)+1), new Point(i+2,imgInput.rows()-(hist[i+1]/scale)+1), new Scalar(0,0,255));
-        }
-    }
-
-    //Find the largest peak in the histogram
-    private static int findHistPeak(int [] hist) {
-
-        int largestValue = hist[0];
-        int indexOfLargest = 0;
-        for(int i=0; i<hist.length; i++) {
-            if(hist[i] > largestValue) {
-                largestValue = hist[i];
-                indexOfLargest = i;
-            }
-        }
-        return indexOfLargest-50;
     }
 }

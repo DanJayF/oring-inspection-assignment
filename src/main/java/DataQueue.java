@@ -6,7 +6,7 @@
  * Author: Dan Flynn
  */
 
-package main.java.ccl;
+package main.java;
 
 class DataQueue {
 
