@@ -130,7 +130,6 @@ public class ORingInspection {
 
 
             ///PROCESS IMAGES///
-
             //1. Calculate and draw the image histogram
             Mat histImg = new Mat(220,220, CvType.CV_8UC3);
             int [] hist = hist(imgInput);
@@ -165,7 +164,6 @@ public class ORingInspection {
 
 
             ///DISPLAY IMAGES///
-
             //Add current images to their JPanels
             containerOriginal.setIcon(new ImageIcon(imgOriginal));
             containerHist.setIcon(new ImageIcon(imgHistogram));
@@ -197,7 +195,7 @@ public class ORingInspection {
     }
 
     //Draw image histogram
-    private static void drawHistogram(Mat histImg, int[] hist) {
+    private static void drawHistogram(Mat histImg, int [] hist) {
 
         //Define histogram scale by finding max hist value
         int max = 0;
@@ -209,7 +207,10 @@ public class ORingInspection {
 
         //Draw histogram object
         for (int i = 0; i < hist.length - 1; i++) {
-            Core.line(histImg, new Point(i + 1, histImg.rows() - (hist[i] / scale) + 1), new Point(i + 2, histImg.rows() - (hist[i + 1] / scale) + 1), new Scalar(0, 0, 255));
+            Core.line(histImg,
+                      new Point(i + 1, histImg.rows() - (hist[i] / scale) + 1),
+                      new Point(i + 2, histImg.rows() - (hist[i + 1] / scale) + 1),
+                      new Scalar(255, 255, 255));
         }
     }
 
@@ -529,21 +530,15 @@ public class ORingInspection {
     }
 
     //Convert to BufferedImage for JLabel
-    private static BufferedImage Mat2BufferedImage(Mat m) {
+    private static BufferedImage Mat2BufferedImage(Mat imgInput) {
 
         int type = BufferedImage.TYPE_BYTE_GRAY;
-        if (m.channels() > 1) {
+        if (imgInput.channels() > 1) {
             type = BufferedImage.TYPE_3BYTE_BGR;
         }
-        int bufferSize = m.channels() * m.cols() * m.rows();
-        byte [] b = new byte[bufferSize];
+        BufferedImage image = new BufferedImage(imgInput.cols(), imgInput.rows(), type);
 
-        m.get(0,0,b); //Get all pixels
-        BufferedImage image = new BufferedImage(m.cols(), m.rows(), type);
-
-        final byte[] targetPixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-        System.arraycopy(b, 0, targetPixels, 0, b.length);
-
+        imgInput.get(0, 0, ((DataBufferByte)image.getRaster().getDataBuffer()).getData());
         return image;
     }
 }
