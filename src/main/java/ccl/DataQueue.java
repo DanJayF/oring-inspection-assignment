@@ -19,9 +19,6 @@ class DataQueue {
     //Is queue empty?
     boolean isEmpty() {return (front == -1 && rear == -1);}
 
-    //Get size of queue
-    int getSize() {return rear - front;}
-
     //Add to queue
     void enQueue(int value) {
         if (isEmpty()) {

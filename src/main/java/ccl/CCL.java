@@ -16,28 +16,22 @@ public class CCL {
     //Main image processing controller
     public byte[] processCCL(Mat imgInput) {
 
-        //Build byte array of input image
-        byte imgSource[] = new byte[imgInput.rows() * imgInput.cols()];
-        imgInput.get(0, 0, imgSource); //Get all pixels
-        byte imgResult[] = imgSource.clone(); //Instantiate imgResult array for use later
+        //Build two byte arrays from input image
+        byte imgData[] = new byte[imgInput.rows() * imgInput.cols()];
+        byte label[]   = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, imgData); //Get all pixels
         
         //Instantiate variables
-        int currentLabel = 255; //Color first component white
+        int currentLabel = 1; //Label 1 is the ring
         int pixel;
         DataQueue queue = new DataQueue();
 
-        //Fill imgResult array with zeros
-        for (int i = 0; i < imgResult.length; i++) {
-            imgResult[i] = (0);
-        }
-
         //Loop through all pixels
-        //TODO: Remove spurious artifacts
-        for (int i = 0; i < imgSource.length; i++) {
+        for (int i = 0; i < imgData.length; i++) {
 
-            if ((imgSource[i] & 0xff) == 255 && imgResult[i] == 0) {
+            if ((imgData[i] & 0xff) == 255 && label[i] == 0) {
 
-                imgResult[i] = (byte) currentLabel;
+                label[i] = (byte) (currentLabel);
 
                 try {
                     //Add current pixel to the queue
@@ -49,7 +43,6 @@ public class CCL {
                         pixel = queue.deQueue();
 
                         //Get all 8 neighbouring pixels
-                        //TODO: Get 4 instead for efficiency?
                         int [] neighbours = {pixel + 1, pixel - 1,
                                              pixel - imgInput.cols(), pixel + imgInput.cols(),
                                              pixel + imgInput.cols() + 1, pixel + imgInput.cols() - 1,
@@ -57,21 +50,28 @@ public class CCL {
 
                         //Foreach neighbour pixel
                         for (int neighbour : neighbours) {
-                            if ((imgSource[neighbour] & 0xff) == 255 && imgResult[neighbour] == 0) {
-                                imgResult[neighbour] = (byte) (currentLabel);
+                            if ((imgData[neighbour] & 0xff) == 255 && label[neighbour] == 0) {
+                                label[neighbour] = (byte) (currentLabel);
                                 queue.enQueue(neighbour);
                             }
                         }
                     }
-                    currentLabel -= 85; //Change next component color to grey
+                    currentLabel += 1; //Next component is not part of the ring
                 }
                 catch (ArrayIndexOutOfBoundsException ignored) {}
             }
         }
 
-        //Save all processed pixels to imgResult
-        imgInput.put(0, 0, imgResult);
-        return imgResult;
+        //Remove imperfections using CCL data
+        for (int i=0; i<imgData.length; i++) {
+            if ((label[i] & 0xff) > 1) {
+                imgData[i] = 0; //Set pixel to black
+            }
+        }
+
+        //Save all processed pixels to label
+        imgInput.put(0, 0, imgData);
+        return imgData;
     }
 
     //Create CCL Image directory path
