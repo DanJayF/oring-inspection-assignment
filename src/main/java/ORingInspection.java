@@ -107,13 +107,16 @@ public class ORingInspection {
         //noinspection InfiniteLoopStatement
         while(true) {
 
+            //Calculate image processing time (start timer)
+            long startTime = System.currentTimeMillis();
+
             ///READ ORIGINAL IMAGE///
             BufferedImage imgOriginal = null;
             try {
                 //Get next image file
                 File file = new File(ORingInspection.class.getResource("/oring-images/Oring" + (i%15+1) + ".jpg").toURI());
                 //Load Greyscale image with OpenCV
-                imgInput = Highgui.imread(file.getPath(),0);
+                imgInput = Highgui.imread(file.getPath(), Highgui.CV_LOAD_IMAGE_GRAYSCALE);
                 imgOriginal = Mat2BufferedImage(imgInput);
             }
             catch (URISyntaxException ignored) {}
@@ -142,10 +145,17 @@ public class ORingInspection {
             performCCL(imgInput);
             BufferedImage imgCCL = Mat2BufferedImage(imgInput);
 
-            //5. Analyse regions to classify the Oring (Pass/Fail)
-            BufferedImage imgResult = Mat2BufferedImage(imgInput);
+            //5. Analyse regions to classify the O-Ring (Pass/Fail)
+            calculatePerimeter(imgInput);
+            int result = 0; //0 = RESULT DISABLED, 1 = PASS, 2 = FAIL
 
-            //6. Measure the image processing time (text annotation)
+            //6. Calculate the image processing time (stop timer)
+            long stopTime = System.currentTimeMillis();
+            long elapsedTime = stopTime - startTime;
+
+            //7. Draw text on analysis image
+            drawImgText(imgInput, (int) elapsedTime, result);
+            BufferedImage imgResult = Mat2BufferedImage(imgInput);
 
 
             ///DISPLAY IMAGES///
@@ -194,7 +204,7 @@ public class ORingInspection {
     }
 
     //Draw image histogram
-    private static void drawHistogram(Mat imgInput, int[] hist) {
+    private static void drawHistogram(Mat histImg, int[] hist) {
 
         //Define histogram scale by finding max hist value
         int max = 0;
@@ -206,7 +216,7 @@ public class ORingInspection {
 
         //Draw histogram object
         for (int i = 0; i < hist.length - 1; i++) {
-            Core.line(imgInput, new Point(i + 1, imgInput.rows() - (hist[i] / scale) + 1), new Point(i + 2, imgInput.rows() - (hist[i + 1] / scale) + 1), new Scalar(0, 0, 255));
+            Core.line(histImg, new Point(i + 1, histImg.rows() - (hist[i] / scale) + 1), new Point(i + 2, histImg.rows() - (hist[i + 1] / scale) + 1), new Scalar(0, 0, 255));
         }
     }
 
@@ -403,6 +413,76 @@ public class ORingInspection {
         //Save all processed pixels to label
         imgInput.put(0, 0, imgData);
         return imgData;
+    }
+
+    //Calculate the perimeter of the ring
+    private static void calculatePerimeter(Mat imgInput) {
+
+        byte imgData[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
+        byte parameter[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
+        imgInput.get(0, 0, imgData);
+
+        //Is pixel an edge pixel
+        boolean edge;
+
+        //Loop through all pixels
+        for (int i = 0; i < imgData.length; i++) {
+
+            if ((imgData[i] & 0xff) == 255) {
+                
+                //Find all neighbouring pixels
+                int[] neighbours = {i + 1, i - 1,
+                                    i - imgInput.cols(), i + imgInput.cols(),
+                                    i - imgInput.cols() - 1, i - imgInput.cols() + 1,
+                                    i + imgInput.cols() - 1, i + imgInput.cols() + 1};
+                edge = false;
+                
+                //Loop through neighbouring pixels
+                for (int neighbour : neighbours) {
+                    if ((imgData[neighbour] & 0xff) == 0) {
+                        edge = true;
+                    }
+                }
+                
+                //If edge pixel, color it white
+                if (edge) {
+                    parameter[i] = (byte) 255;
+                }
+            }
+        }
+        
+        //Save parameter image to imgInput
+        imgInput.put(0, 0, parameter);
+    }
+
+    //Draw image text
+    private static void drawImgText(Mat imgInput, int elapsedTime, int result) {
+
+        //Draw processing time on imgInput
+        Core.putText(imgInput,
+                     "Processing Time: " + elapsedTime + "ms",
+                     new Point (15,15),
+                     Core.FONT_ITALIC,
+                     0.5,
+                     new Scalar(255));
+
+        //Draw analysis result on imgInput
+        if (result == 1) {
+            Core.putText(imgInput,
+                    "PASS",
+                    new Point(60, 210),
+                    Core.FONT_HERSHEY_DUPLEX,
+                    1.2,
+                    new Scalar(255));
+        }
+        else if (result == 2) {
+            Core.putText(imgInput,
+                    "FAIL",
+                    new Point (70,210),
+                    Core.FONT_HERSHEY_DUPLEX,
+                    1.2,
+                    new Scalar(255));
+        }
     }
 
     //Convert to BufferedImage for JLabel
