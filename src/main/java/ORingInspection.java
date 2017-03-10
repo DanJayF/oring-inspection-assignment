@@ -2,7 +2,6 @@
  * Institute of Technology, Blanchardstown
  * Computer Vision (Year 4)
  * O-Ring Image Inspection Assignment
- * Main Class
  * Author: Dan Flynn
  */
 
@@ -47,27 +46,33 @@ public class ORingInspection {
         JPanel panelResult = new JPanel();
 
         //Setup JLabel image containers
-        containerOriginal = new JLabel("Orignal");
+        containerOriginal = new JLabel("Orignal Image");
+        containerOriginal.setFont(new Font("Helvetica", Font.BOLD, 16));
         containerOriginal.setHorizontalTextPosition(JLabel.CENTER);
         containerOriginal.setVerticalTextPosition(JLabel.BOTTOM);
 
-        containerHist     = new JLabel("Histogram");
+        containerHist = new JLabel("Histogram");
+        containerHist.setFont(new Font("Helvetica", Font.BOLD, 16));
         containerHist.setHorizontalTextPosition(JLabel.CENTER);
         containerHist.setVerticalTextPosition(JLabel.BOTTOM);
 
-        containerThresh   = new JLabel("After Thresholding");
+        containerThresh = new JLabel("After Thresholding");
+        containerThresh.setFont(new Font("Helvetica", Font.BOLD, 16));
         containerThresh.setHorizontalTextPosition(JLabel.CENTER);
         containerThresh.setVerticalTextPosition(JLabel.BOTTOM);
 
-        containerBM       = new JLabel("After Binary Morphology");
+        containerBM = new JLabel("After Binary Morphology");
+        containerBM.setFont(new Font("Helvetica", Font.BOLD, 16));
         containerBM.setHorizontalTextPosition(JLabel.CENTER);
         containerBM.setVerticalTextPosition(JLabel.BOTTOM);
 
-        containerCCL      = new JLabel("After CCL");
+        containerCCL = new JLabel("After CCL");
+        containerCCL.setFont(new Font("Helvetica", Font.BOLD, 16));
         containerCCL.setHorizontalTextPosition(JLabel.CENTER);
         containerCCL.setVerticalTextPosition(JLabel.BOTTOM);
 
-        containerResult   = new JLabel("Analysis Result");
+        containerResult = new JLabel("Analysis Result");
+        containerResult.setFont(new Font("Helvetica", Font.BOLD, 16));
         containerResult.setHorizontalTextPosition(JLabel.CENTER);
         containerResult.setVerticalTextPosition(JLabel.BOTTOM);
 
@@ -125,15 +130,16 @@ public class ORingInspection {
 
 
             ///PROCESS IMAGES///
+
             //1. Calculate and draw the image histogram
             Mat histImg = new Mat(220,220, CvType.CV_8UC3);
-            int [] h = hist(imgInput);
-            drawHistogram(histImg, h);
+            int [] hist = hist(imgInput);
+            drawHistogram(histImg, hist);
             BufferedImage imgHistogram = Mat2BufferedImage(histImg);
 
             //2. Threshold the image using histogram
-            int t = calculateOtsu(imgInput, h);
-            threshold(imgInput, t);
+            int otsu = calculateOtsu(imgInput, hist);
+            calculateThreshold(imgInput, otsu);
             BufferedImage imgThreshold = Mat2BufferedImage(imgInput);
 
             //3. Close any small holes in the rings
@@ -147,7 +153,7 @@ public class ORingInspection {
 
             //5. Analyse regions to classify the O-Ring (Pass/Fail)
             calculatePerimeter(imgInput);
-            int result = 0; //0 = RESULT DISABLED, 1 = PASS, 2 = FAIL
+            boolean result = analyseImage(imgInput);
 
             //6. Calculate the image processing time (stop timer)
             long stopTime = System.currentTimeMillis();
@@ -159,6 +165,7 @@ public class ORingInspection {
 
 
             ///DISPLAY IMAGES///
+
             //Add current images to their JPanels
             containerOriginal.setIcon(new ImageIcon(imgOriginal));
             containerHist.setIcon(new ImageIcon(imgHistogram));
@@ -170,8 +177,8 @@ public class ORingInspection {
             //Repack the JFrame
             window.pack();
 
-            //Advance to next every 1 second
-            try {Thread.sleep(1500);}
+            //Advance to next every 2 seconds
+            try {Thread.sleep(2000);}
             catch (InterruptedException e) {e.printStackTrace();}
         }
     }
@@ -179,28 +186,14 @@ public class ORingInspection {
     //Calculate image histogram
     private static int [] hist(Mat imgInput) {
 
-        int hist [] = new int[256];
-        byte data[] = new byte[imgInput.rows() * imgInput.cols()];
-        imgInput.get(0, 0, data); //Get all pixels
+        int hist[] = new int[256];
+        byte imgData[] = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, imgData); //Get all pixels
 
-        for(byte value : data) {
+        for(byte value : imgData) {
             hist[(value & 0xff)]++;
         }
         return hist;
-    }
-
-    //Find the largest peak in the histogram
-    private static int findHistPeak(int [] hist) {
-
-        int largestValue = hist[0];
-        int indexOfLargest = 0;
-        for(int i=0; i<hist.length; i++) {
-            if(hist[i] > largestValue) {
-                largestValue = hist[i];
-                indexOfLargest = i;
-            }
-        }
-        return indexOfLargest-50;
     }
 
     //Draw image histogram
@@ -224,19 +217,19 @@ public class ORingInspection {
     private static int calculateOtsu(Mat imgInput, int [] histData){
 
         //Process input image
-        byte srcData[] = new byte[imgInput.rows() * imgInput.cols()];
-        imgInput.get(0, 0, srcData); //Get all pixels
+        byte imgData[] = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, imgData); //Get all pixels
 
         //Calculate the histogram
         int ptr =0;
-        while(ptr < srcData.length){
-            int h = 0xff & srcData[ptr];
+        while(ptr < imgData.length){
+            int h = 0xff & imgData[ptr];
             histData[h] ++;
             ptr ++;
         }
 
         //Total number of pixels
-        int total = srcData.length;
+        int total = imgData.length;
         float sum =  0;
         for (int t =0; t < 256; t++){
             sum += t * histData[t];
@@ -274,36 +267,32 @@ public class ORingInspection {
         return threshold - 50;
     }
 
-    //Process image threshold on input image (convert to binary)
-    private static void threshold(Mat imgInput, int t) {
+    //Process image threshold on imgInput (convert to binary)
+    private static void calculateThreshold(Mat imgInput, int t) {
 
-        //Note that we need to use an & with 0xff here.
-        //This is because Java uses signed two's complement types.
-        //The & operation will give us the pixel in the range we are used to (0..255).
+        byte imgData[] = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, imgData);
 
-        byte data[] = new byte[imgInput.rows() * imgInput.cols()];
-        imgInput.get(0, 0, data);
-        for (int i=0;i<data.length;i++)
-        {
-            int unsigned = (data[i] & 0xff);
+        for (int i=0; i<imgData.length; i++) {
+            int unsigned = (imgData[i] & 0xff);
             if (unsigned > t)
-                data[i] = (byte)0;
+                imgData[i] = (byte) 0;
             else
-                data[i] = (byte)255;
+                imgData[i] = (byte) 255;
         }
-        imgInput.put(0, 0, data);
+        imgInput.put(0, 0, imgData);
     }
 
     //Dilate the image input
     private static void dilate(Mat imgInput) {
 
         //Build byte array of input image
-        byte data[] = new byte[imgInput.rows() * imgInput.cols()];
-        imgInput.get(0, 0, data); //Get all pixels
-        byte copy[] = data.clone(); //Copy of data byte array
+        byte imgData[] = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, imgData); //Get all pixels
+        byte copy[] = imgData.clone(); //Copy of imgData byte array
 
         //Loops through 48400 pixels (220x200 images)
-        for(int i=0; i<data.length; i++) {
+        for(int i=0; i<imgData.length; i++) {
 
             //Get all 8 neighbour pixels to the current pixel
             int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
@@ -312,7 +301,7 @@ public class ORingInspection {
                 //Loops through all 8 neighbouring pixels
                 for(int neighbour : neighbours) {
                     if((copy[neighbour] & 0xff) == 255) {
-                        data[i] = (byte) 255;
+                        imgData[i] = (byte) 255;
                     }
                 }
             }
@@ -320,20 +309,20 @@ public class ORingInspection {
             catch(ArrayIndexOutOfBoundsException ignored) {}
         }
 
-        //Replace imgInput with dilated image data
-        imgInput.put(0, 0, data);
+        //Replace imgInput with dilated image imgData
+        imgInput.put(0, 0, imgData);
     }
 
     //Erode the image input
     private static void erode(Mat imgInput) {
 
         //Build byte array of input image
-        byte data[] = new byte[imgInput.rows() * imgInput.cols()];
-        imgInput.get(0, 0, data); //Get all pixels
-        byte copy[] = data.clone(); //Copy of data byte array
+        byte imgData[] = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, imgData); //Get all pixels
+        byte copy[] = imgData.clone(); //Copy of imgData byte array
 
         //Loops through 48400 pixels (220x200 images)
-        for (int i=0; i<data.length; i++) {
+        for (int i=0; i<imgData.length; i++) {
 
             //Get all 8 neighbour pixels to the current pixel
             int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
@@ -342,7 +331,7 @@ public class ORingInspection {
                 //Loops through all 8 neighbouring pixels
                 for(int neighbour : neighbours) {
                     if ((copy[neighbour] & 0xff) == 0) {
-                        data[i] = (byte) 0;
+                        imgData[i] = (byte) 0;
                     }
                 }
             }
@@ -350,8 +339,8 @@ public class ORingInspection {
             catch(ArrayIndexOutOfBoundsException ignored) {}
         }
 
-        //Replace ingInput with eroded image data
-        imgInput.put(0, 0, data);
+        //Replace ingInput with eroded image imgData
+        imgInput.put(0, 0, imgData);
     }
 
     //Perform Connected Component Labelling (CCL) on imgInput
@@ -378,16 +367,16 @@ public class ORingInspection {
                     //Add current pixel to the queue
                     queue.enQueue(i);
 
-                    //While queue is not empty
+                    //While queue is NOT empty
                     while (!queue.isEmpty()) {
 
                         pixel = queue.deQueue();
 
                         //Get all 8 neighbouring pixels
                         int [] neighbours = {pixel + 1, pixel - 1,
-                                pixel - imgInput.cols(), pixel + imgInput.cols(),
-                                pixel + imgInput.cols() + 1, pixel + imgInput.cols() - 1,
-                                pixel - imgInput.cols() + 1, pixel - imgInput.cols() - 1};
+                                             pixel - imgInput.cols(), pixel + imgInput.cols(),
+                                             pixel + imgInput.cols() + 1, pixel + imgInput.cols() - 1,
+                                             pixel - imgInput.cols() + 1, pixel - imgInput.cols() - 1};
 
                         //Foreach neighbour pixel
                         for (int neighbour : neighbours) {
@@ -455,8 +444,62 @@ public class ORingInspection {
         imgInput.put(0, 0, parameter);
     }
 
+    //Final analysis on the ring (Pass or Fail)
+    private static boolean analyseImage(Mat imgInput) {
+
+        //Build two byte arrays from input image
+        byte imgData[] = new byte[imgInput.rows()*imgInput.cols()*imgInput.channels()];
+        byte label[] = new byte[imgInput.rows()*imgInput.cols()*imgInput.channels()];
+        imgInput.get(0, 0, imgData); //Get all pixels
+
+        //Instantiate variables
+        int ringCount = 1;
+        int pixel;
+        DataQueue queue = new DataQueue();
+
+        //Loop through all pixels
+        for (int i = 0; i < imgData.length; i++) {
+
+            if((imgData[i] & 0xff) == 255 && label[i] == 0) {
+
+                label[i] = (byte) (ringCount);
+
+                try {
+                    //Add current pixel to the queue
+                    queue.enQueue(i);
+
+                    //While queue is NOT empty
+                    while(!queue.isEmpty()) {
+
+                        pixel = queue.deQueue();
+
+                        //Get all 8 neighbouring pixels
+                        int [] neighbours = {pixel + 1, pixel - 1,
+                                             pixel - imgInput.cols(), pixel + imgInput.cols(),
+                                             pixel + imgInput.cols() + 1, pixel + imgInput.cols() - 1,
+                                             pixel - imgInput.cols() + 1, pixel - imgInput.cols() - 1};
+
+                        for (int neighbour : neighbours) {
+                            if ((imgData[neighbour] & 0xff) == 255 && label[neighbour] == 0) {
+                                label[neighbour] = (byte) (ringCount);
+                                queue.enQueue(neighbour);
+                            }
+                        }
+                    }
+                    //Complete ring found! Increment by one
+                    ringCount += 1;
+                }
+                catch(ArrayIndexOutOfBoundsException ignored) {}
+            }
+        }
+
+        //If ringCount was incremented twice, ring is intact, otherwise ring is broken
+        //Return true or false based on this analysis
+        return ringCount == 3;
+    }
+
     //Draw image text
-    private static void drawImgText(Mat imgInput, int elapsedTime, int result) {
+    private static void drawImgText(Mat imgInput, int elapsedTime, boolean result) {
 
         //Draw processing time on imgInput
         Core.putText(imgInput,
@@ -467,7 +510,7 @@ public class ORingInspection {
                      new Scalar(255));
 
         //Draw analysis result on imgInput
-        if (result == 1) {
+        if (result) {
             Core.putText(imgInput,
                     "PASS",
                     new Point(60, 210),
@@ -475,7 +518,7 @@ public class ORingInspection {
                     1.2,
                     new Scalar(255));
         }
-        else if (result == 2) {
+        else {
             Core.putText(imgInput,
                     "FAIL",
                     new Point (70,210),

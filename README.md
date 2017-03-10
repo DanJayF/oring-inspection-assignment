@@ -1,5 +1,5 @@
 # O-Ring Inspection Assignment
-##### Computer Vision 4th Year Assignment using Java & OpenCV
+**Computer Vision 4th Year Assignment using Java & OpenCV**
 
 * OpenCV only used to read, display and annotate the output images.
 * All image processing is custom code.
