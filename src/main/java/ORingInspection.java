@@ -6,7 +6,7 @@
  * Author: Dan Flynn
  */
 
-package main.java.ie.itb.computervision;
+package main.java;
 
 import java.awt.BorderLayout;
 import java.awt.image.BufferedImage;
@@ -14,11 +14,11 @@ import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.Map;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
 
+import main.java.ccl.CCL;
 import org.opencv.core.*;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
@@ -31,7 +31,7 @@ public class ORingInspection {
         System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 
         //Create and set up the window.
-        JFrame window = new JFrame("OpenCV O-ring Inspection");
+        JFrame window = new JFrame("OpenCV O-Ring Inspection");
         window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
         //Setup the JLabel image container
@@ -46,7 +46,7 @@ public class ORingInspection {
         Mat imgInput = new Mat();
         Mat imgOutput = new Mat();
         //CV_8UC3 = 8-bit unsigned integer matrix/image with 3 channels
-        Mat histImg = new Mat(256,256, CvType.CV_8UC3);
+        Mat histImg = new Mat(256,256, CvType.CV_8UC3); //TODO: Integrate into JFrame
 
         //Loop variables
         int i=1; //Image counter
@@ -73,20 +73,19 @@ public class ORingInspection {
             int t = calculateOtsu(imgInput, h);
             threshold(imgInput, t);
 
-            //2.1 Close any small holes in the rings
-            dilate(imgInput, 1);
-            erode(imgInput, 1);
+            //2. Draw histogram for JFrame
+            //drawHistogram(histImg, h); //TODO: Integrate into JFrame
 
-            //2.2 Remove any spurious artifacts
-            erode(imgInput, 3);
-            dilate(imgInput, 2);
+            //3. Close any small holes in the rings
+            dilate(imgInput);
+            erode(imgInput);
 
-            //3. Perform CCL to extract the two regions (WIP)
-            processCCL(imgInput, file);
+            //4. Perform CCL to remove any spurious artifacts
+            performCCL(imgInput, file);
 
-            //4. Analyse regions to classify the Oring (Pass/Fail)
+            //5. Analyse regions to classify the Oring (Pass/Fail)
 
-            //5. Measure the image processing time (text annotation)
+            //6. Measure the image processing time (text annotation)
 
 
             ///DISPLAY IMAGE///
@@ -114,12 +113,8 @@ public class ORingInspection {
     //Calculate image histogram
     private static int [] hist(Mat imgInput) {
 
-        //Note that we need to use an & with 0xff here.
-        //This is because Java uses signed two's complement types.
-        //The & operation will give us the pixel in the range we are used to (0..255).
-
         int hist [] = new int[256];
-        byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
+        byte data[] = new byte[imgInput.rows() * imgInput.cols()];
         imgInput.get(0, 0, data); //Get all pixels
 
         for(byte value : data) {
@@ -132,7 +127,7 @@ public class ORingInspection {
     private static int calculateOtsu(Mat imgInput, int [] histData){
 
         //Process input image
-        byte srcData[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
+        byte srcData[] = new byte[imgInput.rows() * imgInput.cols()];
         imgInput.get(0, 0, srcData); //Get all pixels
 
         //Calculate the histogram
@@ -152,7 +147,7 @@ public class ORingInspection {
 
         float sumB =0;
         int wB = 0;
-        int wF = 0;
+        int wF;
 
         float varMax = 0;
         int threshold = 0;
@@ -189,7 +184,7 @@ public class ORingInspection {
         //This is because Java uses signed two's complement types.
         //The & operation will give us the pixel in the range we are used to (0..255).
 
-        byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
+        byte data[] = new byte[imgInput.rows() * imgInput.cols()];
         imgInput.get(0, 0, data);
         for (int i=0;i<data.length;i++)
         {
@@ -203,103 +198,89 @@ public class ORingInspection {
     }
 
     //Dilate the image input
-    private static void dilate(Mat imgInput, int runCount) {
+    private static void dilate(Mat imgInput) {
 
-        //Run dilation process runCount times
-        for(int x=0; x<runCount; x++) {
+        //Build byte array of input image
+        byte data[] = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, data); //Get all pixels
+        byte copy[] = data.clone(); //Copy of data byte array
 
-            byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
-            imgInput.get(0, 0, data); //Get all pixels
-            byte copy[] = data.clone(); //Create copy of data byte array
+        //Loops through 48400 pixels (220x200 images)
+        for(int i=0; i<data.length; i++) {
 
-            //Loops through 48400 pixels (220x200 images)
-            for(int i=0; i<data.length; i++) {
+            //Get all 8 neighbour pixels to the current pixel
+            int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
 
-                //Get all 8 neighbour pixels to the current pixel
-                int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
-
-                try {
-                    //Loops through all 8 neighbouring pixels
-                    for(int neighbour : neighbours) {
-                        if((copy[neighbour] & 0xff) == 255) {
-                            data[i] = (byte) 255;
-                        }
+            try {
+                //Loops through all 8 neighbouring pixels
+                for(int neighbour : neighbours) {
+                    if((copy[neighbour] & 0xff) == 255) {
+                        data[i] = (byte) 255;
                     }
                 }
-                //Ignore ArrayIndexOutOfBounds exceptions
-                catch(ArrayIndexOutOfBoundsException ignored) {}
             }
-
-            //Replace ingInput with dilated image data
-            imgInput.put(0, 0, data);
+            //Ignore ArrayIndexOutOfBounds exceptions
+            catch(ArrayIndexOutOfBoundsException ignored) {}
         }
+
+        //Replace imgInput with dilated image data
+        imgInput.put(0, 0, data);
     }
 
     //Erode the image input
-    private static void erode(Mat imgInput, int runCount) {
+    private static void erode(Mat imgInput) {
 
-        //Run erosion process runCount times
-        for(int x=0; x<runCount; x++) {
+        //Build byte array of input image
+        byte data[] = new byte[imgInput.rows() * imgInput.cols()];
+        imgInput.get(0, 0, data); //Get all pixels
+        byte copy[] = data.clone(); //Copy of data byte array
 
-            byte data[] = new byte[imgInput.rows() * imgInput.cols() * imgInput.channels()];
-            imgInput.get(0, 0, data); //Get all pixels
-            byte copy[] = data.clone(); //Create copy of data byte array
+        //Loops through 48400 pixels (220x200 images)
+        for (int i=0; i<data.length; i++) {
 
-            //Loops through 48400 pixels (220x200 images)
-            for (int i=0; i<data.length; i++) {
+            //Get all 8 neighbour pixels to the current pixel
+            int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
 
-                //Get all 8 neighbour pixels to the current pixel
-                int [] neighbours = {i+1, i-1, i-imgInput.cols(), i+imgInput.cols(), i+imgInput.cols()+1, i+imgInput.cols()-1, i-imgInput.cols()+1, i-imgInput.cols()-1};
-
-                try {
-                    //Loops through all 8 neighbouring pixels
-                    for(int neighbour : neighbours) {
-                        if ((copy[neighbour] & 0xff) == 0) {
-                            data[i] = (byte) 0;
-                        }
+            try {
+                //Loops through all 8 neighbouring pixels
+                for(int neighbour : neighbours) {
+                    if ((copy[neighbour] & 0xff) == 0) {
+                        data[i] = (byte) 0;
                     }
                 }
-                //Ignore ArrayIndexOutOfBounds exceptions
-                catch(ArrayIndexOutOfBoundsException ignored) {}
             }
-
-            //Replace ingInput with eroded image data
-            imgInput.put(0, 0, data);
+            //Ignore ArrayIndexOutOfBounds exceptions
+            catch(ArrayIndexOutOfBoundsException ignored) {}
         }
+
+        //Replace ingInput with eroded image data
+        imgInput.put(0, 0, data);
     }
 
     //Process Connected Component Labelling
-    private static void processCCL(Mat imgInput, File file) {
+    private static void performCCL(Mat imgInput, File file) {
 
+        //1. Perform CCL on imgInput to identify components
         CCL ccl = new CCL();
-        String filePath = file.getPath(); //Base path as String
+        imgInput.put(0, 0, ccl.processCCL(imgInput));
+
+        //2. Get new CCL images directory path from base bath
+        String filePath = file.getPath();
+        String cclDirectoryName = "oring-ccl";
+        File cclPath = ccl.getCCLImagesPath(filePath, cclDirectoryName);
+
+        //3. Get image file extension
+        String format = ccl.getFileNameExtension(filePath);
 
         try {
-            //1. Convert imgInput to a BufferedImage
-            BufferedImage img = Mat2BufferedImage(imgInput);
-
-            //2. Process CCL and retrieve all image components
-            Map<Integer, BufferedImage> components = ccl.Process(img);
-
-            //3. Get new CCL images directory path
-            String cclDirectoryName = "oring-ccl";
-            File cclPath = ccl.getCCLImagesPath(filePath, cclDirectoryName);
-            
-            //4. Get image file extension
-            String format = ccl.getFileNameExtension(filePath);
-
-            //5.1 Check if directory exists, if not, create it
+            //4.1 Check if directory exists, if not, create it
             if(ccl.checkIfDirectoryExists(cclPath)) {
-                
-                //6. Output an image for each component
-                for(Integer cNum : components.keySet()) {
-                    ImageIO.write(components.get(cNum), format, new File(cclPath + File.separator + ccl.getBaseFileName(file) + "-component-" + cNum + "."  + format));
-                }
-                //7. Output fully processed images
-                ImageIO.write(ccl.getProcessedImage(), format, new File(cclPath + File.separator + ccl.getBaseFileName(file) + "-processed" + "." + format));
+
+                //5. Output fully processed images
+                ImageIO.write(Mat2BufferedImage(imgInput), format, new File(cclPath + File.separator + ccl.getBaseFileName(file) + "-ccl" + "." + format));
             }
 
-            //5.2 Throw an IOException if output directory creation fails
+            //4.2 Throw an IOException if output directory creation fails
             else {
                 throw new IOException("Error while creating /" + cclDirectoryName + " directory");
             }
@@ -309,7 +290,6 @@ public class ORingInspection {
 
     //Convert to BufferedImage for JLabel
     private static BufferedImage Mat2BufferedImage(Mat m) {
-        //Source: http://answers.opencv.org/question/10344/opencv-java-load-image-to-gui/
 
         int type = BufferedImage.TYPE_BYTE_GRAY;
         if (m.channels() > 1) {
